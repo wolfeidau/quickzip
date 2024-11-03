@@ -74,9 +74,9 @@ func testCreateArchive(t *testing.T, dir string, files map[string]os.FileInfo, f
 	defer os.Remove(f.Name())
 	defer f.Close()
 
-	a, err := NewArchiver(f, dir, opts...)
+	a, err := NewArchiver(f, opts...)
 	require.NoError(t, err)
-	require.NoError(t, a.Archive(context.Background(), files))
+	require.NoError(t, a.Archive(context.Background(), dir, files))
 	require.NoError(t, a.Close())
 
 	_, entries := a.Written()
@@ -150,7 +150,7 @@ func TestArchiveCancelContext(t *testing.T) {
 	defer os.Remove(f.Name())
 	defer f.Close()
 
-	a, err := NewArchiver(f, dir, WithArchiverConcurrency(1))
+	a, err := NewArchiver(f, WithArchiverConcurrency(1))
 	a.RegisterCompressor(zip.Deflate, FlateCompressor(1))
 	require.NoError(t, err)
 
@@ -161,7 +161,7 @@ func TestArchiveCancelContext(t *testing.T) {
 	go func() {
 		defer func() { done <- struct{}{} }()
 
-		require.EqualError(t, a.Archive(ctx, files), "context canceled")
+		require.EqualError(t, a.Archive(ctx, dir, files), "context canceled")
 	}()
 
 	defer func() {
@@ -196,10 +196,10 @@ func TestArchiveWithCompressor(t *testing.T) {
 	defer os.Remove(f.Name())
 	defer f.Close()
 
-	a, err := NewArchiver(f, dir)
+	a, err := NewArchiver(f)
 	a.RegisterCompressor(zip.Deflate, FlateCompressor(1))
 	require.NoError(t, err)
-	require.NoError(t, a.Archive(context.Background(), files))
+	require.NoError(t, a.Archive(context.Background(), dir, files))
 	require.NoError(t, a.Close())
 
 	bytes, entries := a.Written()
@@ -223,9 +223,9 @@ func TestArchiveWithMethod(t *testing.T) {
 	defer os.Remove(f.Name())
 	defer f.Close()
 
-	a, err := NewArchiver(f, dir, WithArchiverMethod(zip.Store))
+	a, err := NewArchiver(f, WithArchiverMethod(zip.Store))
 	require.NoError(t, err)
-	require.NoError(t, a.Archive(context.Background(), files))
+	require.NoError(t, a.Archive(context.Background(), dir, files))
 	require.NoError(t, a.Close())
 
 	bytes, entries := a.Written()
@@ -250,9 +250,9 @@ func TestArchiveWithStageDirectory(t *testing.T) {
 	defer os.Remove(f.Name())
 	defer f.Close()
 
-	a, err := NewArchiver(f, chroot, WithStageDirectory(dir))
+	a, err := NewArchiver(f, WithStageDirectory(dir))
 	require.NoError(t, err)
-	require.NoError(t, a.Archive(context.Background(), files))
+	require.NoError(t, a.Archive(context.Background(), chroot, files))
 	require.NoError(t, a.Close())
 
 	bytes, entries := a.Written()
@@ -292,14 +292,14 @@ func TestArchiveWithConcurrency(t *testing.T) {
 			defer os.Remove(f.Name())
 			defer f.Close()
 
-			a, err := NewArchiver(f, dir, WithArchiverConcurrency(test.concurrency))
+			a, err := NewArchiver(f, WithArchiverConcurrency(test.concurrency))
 			if !test.pass {
 				require.Error(t, err)
 				return
 			}
 
 			require.NoError(t, err)
-			require.NoError(t, a.Archive(context.Background(), files))
+			require.NoError(t, a.Archive(context.Background(), dir, files))
 			require.NoError(t, a.Close())
 
 			bytes, entries := a.Written()
@@ -342,9 +342,9 @@ func TestArchiveWithBufferSize(t *testing.T) {
 			defer os.Remove(f.Name())
 			defer f.Close()
 
-			a, err := NewArchiver(f, dir, WithArchiverBufferSize(test.buffersize))
+			a, err := NewArchiver(f, WithArchiverBufferSize(test.buffersize))
 			require.NoError(t, err)
-			require.NoError(t, a.Archive(context.Background(), files))
+			require.NoError(t, a.Archive(context.Background(), dir, files))
 			require.NoError(t, a.Close())
 
 			if !test.zero {
@@ -369,7 +369,7 @@ func TestArchiveChroot(t *testing.T) {
 
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "chroot"), 0777))
 
-	a, err := NewArchiver(f, filepath.Join(dir, "chroot"))
+	a, err := NewArchiver(f)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -396,7 +396,7 @@ func TestArchiveChroot(t *testing.T) {
 			files[w.Name()] = stat
 		}
 
-		err = a.Archive(context.Background(), files)
+		err = a.Archive(context.Background(), filepath.Join(dir, "chroot"), files)
 		if test.good {
 			assert.NoError(t, err)
 		} else {
@@ -421,9 +421,9 @@ func TestArchiveWithOffset(t *testing.T) {
 
 	f.Seek(1000, io.SeekStart)
 
-	a, err := NewArchiver(f, dir, WithArchiverOffset(1000))
+	a, err := NewArchiver(f, WithArchiverOffset(1000))
 	require.NoError(t, err)
-	require.NoError(t, a.Archive(context.Background(), files))
+	require.NoError(t, a.Archive(context.Background(), dir, files))
 	require.NoError(t, a.Close())
 
 	bytes, entries := a.Written()
@@ -455,7 +455,7 @@ func benchmarkArchiveOptions(b *testing.B, stdDeflate bool, options ...ArchiverO
 		f, err := os.Create(filepath.Join(dir, "fastzip-benchmark.zip"))
 		require.NoError(b, err)
 
-		a, err := NewArchiver(f, *archiveDir, options...)
+		a, err := NewArchiver(f, options...)
 		if stdDeflate {
 			a.RegisterCompressor(zip.Deflate, StdFlateCompressor(-1))
 		} else {
@@ -463,7 +463,7 @@ func benchmarkArchiveOptions(b *testing.B, stdDeflate bool, options ...ArchiverO
 		}
 		require.NoError(b, err)
 
-		err = a.Archive(context.Background(), files)
+		err = a.Archive(context.Background(), *archiveDir, files)
 		require.NoError(b, err)
 
 		require.NoError(b, a.Close())

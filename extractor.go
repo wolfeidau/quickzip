@@ -45,20 +45,19 @@ type Extractor struct {
 	closer  io.Closer
 	m       sync.Mutex
 	options extractorOptions
-	chroot  string
 }
 
 // NewExtractor opens a zip file and returns a new extractor.
 //
 // Close() should be called to close the extractor's underlying zip.Reader
 // when done.
-func NewExtractor(filename, chroot string, opts ...ExtractorOption) (*Extractor, error) {
+func NewExtractor(filename string, opts ...ExtractorOption) (*Extractor, error) {
 	zr, err := zip.OpenReader(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	return newExtractor(&zr.Reader, zr, chroot, opts)
+	return newExtractor(&zr.Reader, zr, opts)
 }
 
 // NewExtractor returns a new extractor, reading from the reader provided.
@@ -66,23 +65,17 @@ func NewExtractor(filename, chroot string, opts ...ExtractorOption) (*Extractor,
 // The size of the archive should be provided.
 //
 // Unlike with NewExtractor(), calling Close() on the extractor is unnecessary.
-func NewExtractorFromReader(r io.ReaderAt, size int64, chroot string, opts ...ExtractorOption) (*Extractor, error) {
+func NewExtractorFromReader(r io.ReaderAt, size int64, opts ...ExtractorOption) (*Extractor, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
 		return nil, err
 	}
 
-	return newExtractor(zr, nil, chroot, opts)
+	return newExtractor(zr, nil, opts)
 }
 
-func newExtractor(r *zip.Reader, c io.Closer, chroot string, opts []ExtractorOption) (*Extractor, error) {
-	var err error
-	if chroot, err = filepath.Abs(chroot); err != nil {
-		return nil, err
-	}
-
+func newExtractor(r *zip.Reader, c io.Closer, opts []ExtractorOption) (*Extractor, error) {
 	e := &Extractor{
-		chroot: chroot,
 		zr:     r,
 		closer: c,
 	}
@@ -128,7 +121,10 @@ func (e *Extractor) Written() (bytes, entries int64) {
 
 // Extract extracts files, creates symlinks and directories from the
 // archive.
-func (e *Extractor) Extract(ctx context.Context) (err error) {
+func (e *Extractor) Extract(ctx context.Context, chroot string) (err error) {
+	if chroot, err = filepath.Abs(chroot); err != nil {
+		return err
+	}
 	limiter := make(chan struct{}, e.options.concurrency)
 
 	wg, ctx := errgroup.WithContext(ctx)
@@ -144,13 +140,13 @@ func (e *Extractor) Extract(ctx context.Context) (err error) {
 		}
 
 		var path string
-		path, err = filepath.Abs(filepath.Join(e.chroot, file.Name))
+		path, err = filepath.Abs(filepath.Join(chroot, file.Name))
 		if err != nil {
 			return err
 		}
 
-		if !strings.HasPrefix(path, e.chroot+string(filepath.Separator)) && path != e.chroot {
-			return fmt.Errorf("%s cannot be extracted outside of chroot (%s)", path, e.chroot)
+		if !strings.HasPrefix(path, chroot+string(filepath.Separator)) && path != chroot {
+			return fmt.Errorf("%s cannot be extracted outside of chroot (%s)", path, chroot)
 		}
 
 		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
@@ -200,7 +196,7 @@ func (e *Extractor) Extract(ctx context.Context) (err error) {
 			continue
 		}
 
-		path, err := filepath.Abs(filepath.Join(e.chroot, file.Name))
+		path, err := filepath.Abs(filepath.Join(chroot, file.Name))
 		if err != nil {
 			return err
 		}

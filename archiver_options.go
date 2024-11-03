@@ -16,7 +16,6 @@ type archiverOptions struct {
 	concurrency int
 	bufferSize  int
 	stageDir    string
-	prefixPath  string
 	offset      int64
 }
 
@@ -70,14 +69,6 @@ func WithStageDirectory(dir string) ArchiverOption {
 func WithArchiverOffset(n int64) ArchiverOption {
 	return func(o *archiverOptions) error {
 		o.offset = n
-		return nil
-	}
-}
-
-// WithPathPrefix will set the directory prefix to be used when extracting files.
-func WithPathPrefix(prefix string) ArchiverOption {
-	return func(o *archiverOptions) error {
-		o.prefixPath = prefix
 		return nil
 	}
 }

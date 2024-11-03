@@ -48,27 +48,19 @@ type Archiver struct {
 
 	zw      *zip.Writer
 	options archiverOptions
-	chroot  string
 	m       sync.Mutex
 
 	compressors map[uint16]zip.Compressor
 }
 
 // NewArchiver returns a new Archiver.
-func NewArchiver(w io.Writer, chroot string, opts ...ArchiverOption) (*Archiver, error) {
-	var err error
-	if chroot, err = filepath.Abs(chroot); err != nil {
-		return nil, err
-	}
-
+func NewArchiver(w io.Writer, opts ...ArchiverOption) (*Archiver, error) {
 	a := &Archiver{
-		chroot:      chroot,
 		compressors: make(map[uint16]zip.Compressor),
 	}
 
 	a.options.method = zip.Deflate
 	a.options.concurrency = runtime.GOMAXPROCS(0)
-	a.options.stageDir = chroot
 	a.options.bufferSize = -1
 	for _, o := range opts {
 		err := o(&a.options)
@@ -106,7 +98,11 @@ func (a *Archiver) Written() (bytes, entries int64) {
 }
 
 // Archive archives all files, symlinks and directories.
-func (a *Archiver) Archive(ctx context.Context, files map[string]os.FileInfo) (err error) {
+func (a *Archiver) Archive(ctx context.Context, chroot string, files map[string]os.FileInfo) (err error) {
+	if chroot, err = filepath.Abs(chroot); err != nil {
+		return err
+	}
+
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
@@ -147,17 +143,13 @@ func (a *Archiver) Archive(ctx context.Context, files map[string]os.FileInfo) (e
 			return err
 		}
 
-		if !strings.HasPrefix(path, a.chroot+string(filepath.Separator)) && path != a.chroot {
-			return fmt.Errorf("%s cannot be archived from outside of chroot (%s)", name, a.chroot)
+		if !strings.HasPrefix(path, chroot+string(filepath.Separator)) && path != chroot {
+			return fmt.Errorf("%s cannot be archived from outside of chroot (%s)", name, chroot)
 		}
 
-		rel, err := filepath.Rel(a.chroot, path)
+		rel, err := filepath.Rel(chroot, path)
 		if err != nil {
 			return err
-		}
-
-		if a.options.prefixPath != "" {
-			rel = filepath.Join(a.options.prefixPath, rel)
 		}
 
 		hdr := &hdrs[i]
