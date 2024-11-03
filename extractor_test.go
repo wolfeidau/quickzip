@@ -16,7 +16,7 @@ import (
 
 func testExtract(t *testing.T, filename string, files map[string]testFile) map[string]os.FileInfo {
 	dir := t.TempDir()
-	e, err := NewExtractor(filename, dir)
+	e, err := NewExtractor(filename)
 	require.NoError(t, err)
 	defer e.Close()
 
@@ -24,7 +24,7 @@ func testExtract(t *testing.T, filename string, files map[string]testFile) map[s
 		assert.Equal(t, filepath.ToSlash(f.Name), f.Name, "zip file path separator not /")
 	}
 
-	require.NoError(t, e.Extract(context.Background()))
+	require.NoError(t, e.Extract(context.Background(), dir))
 
 	result := make(map[string]os.FileInfo)
 	err = filepath.Walk(dir, func(pathname string, fi os.FileInfo, err error) error {
@@ -75,7 +75,7 @@ func TestExtractCancelContext(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	testCreateArchive(t, dir, files, func(filename, chroot string) {
-		e, err := NewExtractor(filename, dir, WithExtractorConcurrency(1))
+		e, err := NewExtractor(filename, WithExtractorConcurrency(1))
 		require.NoError(t, err)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -85,7 +85,7 @@ func TestExtractCancelContext(t *testing.T) {
 		go func() {
 			defer func() { done <- struct{}{} }()
 
-			require.EqualError(t, e.Extract(ctx), "context canceled")
+			require.EqualError(t, e.Extract(ctx, dir), "context canceled")
 		}()
 
 		for {
@@ -113,12 +113,12 @@ func TestExtractorWithDecompressor(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	testCreateArchive(t, dir, files, func(filename, chroot string) {
-		e, err := NewExtractor(filename, dir)
+		e, err := NewExtractor(filename)
 		require.NoError(t, err)
 		e.RegisterDecompressor(zip.Deflate, StdFlateDecompressor())
 		defer e.Close()
 
-		require.NoError(t, e.Extract(context.Background()))
+		require.NoError(t, e.Extract(context.Background(), dir))
 	})
 }
 
@@ -143,7 +143,7 @@ func TestExtractorWithConcurrency(t *testing.T) {
 
 	testCreateArchive(t, dir, files, func(filename, chroot string) {
 		for _, test := range concurrencyTests {
-			e, err := NewExtractor(filename, dir, WithExtractorConcurrency(test.concurrency))
+			e, err := NewExtractor(filename, WithExtractorConcurrency(test.concurrency))
 			if test.pass {
 				assert.NoError(t, err)
 				require.NoError(t, e.Close())
@@ -164,12 +164,12 @@ func TestExtractorWithChownErrorHandler(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	testCreateArchive(t, dir, files, func(filename, chroot string) {
-		e, err := NewExtractor(filename, dir, WithExtractorChownErrorHandler(func(name string, err error) error {
+		e, err := NewExtractor(filename, WithExtractorChownErrorHandler(func(name string, err error) error {
 			assert.Fail(t, "should have no error")
 			return nil
 		}))
 		assert.NoError(t, err)
-		assert.NoError(t, e.Extract(context.Background()))
+		assert.NoError(t, e.Extract(context.Background(), dir))
 		require.NoError(t, e.Close())
 	})
 }
@@ -190,9 +190,9 @@ func TestExtractorFromReader(t *testing.T) {
 		fi, err := f.Stat()
 		require.NoError(t, err)
 
-		e, err := NewExtractorFromReader(f, fi.Size(), chroot)
+		e, err := NewExtractorFromReader(f, fi.Size())
 		require.NoError(t, err)
-		require.NoError(t, e.Extract(context.Background()))
+		require.NoError(t, e.Extract(context.Background(), chroot))
 		require.NoError(t, e.Close())
 	})
 }
@@ -220,11 +220,11 @@ func TestExtractorDetectSymlinkTraversal(t *testing.T) {
 	zw.Close()
 	f.Close()
 
-	e, err := NewExtractor(archivePath, dir)
+	e, err := NewExtractor(archivePath)
 	require.NoError(t, err)
 	defer e.Close()
 
-	require.Error(t, e.Extract(context.Background()))
+	require.Error(t, e.Extract(context.Background(), dir))
 }
 
 func aopts(options ...ArchiverOption) []ArchiverOption {
@@ -245,10 +245,10 @@ func benchmarkExtractOptions(b *testing.B, stdDeflate bool, ao []ArchiverOption,
 	defer os.Remove(f.Name())
 
 	ao = append(ao, WithStageDirectory(dir))
-	a, err := NewArchiver(f, *archiveDir, ao...)
+	a, err := NewArchiver(f, ao...)
 	require.NoError(b, err)
 
-	err = a.Archive(context.Background(), files)
+	err = a.Archive(context.Background(), *archiveDir, files)
 	require.NoError(b, err)
 	require.NoError(b, a.Close())
 	require.NoError(b, f.Close())
@@ -258,12 +258,12 @@ func benchmarkExtractOptions(b *testing.B, stdDeflate bool, ao []ArchiverOption,
 	fi, _ := os.Stat(archiveName)
 	b.SetBytes(fi.Size())
 	for n := 0; n < b.N; n++ {
-		e, err := NewExtractor(archiveName, dir, eo...)
+		e, err := NewExtractor(archiveName, eo...)
 		if stdDeflate {
 			e.RegisterDecompressor(zip.Deflate, StdFlateDecompressor())
 		}
 		require.NoError(b, err)
-		require.NoError(b, e.Extract(context.Background()))
+		require.NoError(b, e.Extract(context.Background(), dir))
 	}
 }
 
