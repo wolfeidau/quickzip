@@ -24,6 +24,7 @@ var fixedModTime = time.Date(2020, time.February, 1, 6, 0, 0, 0, time.UTC)
 type testFile struct {
 	mode     os.FileMode
 	contents string
+	modified time.Time
 }
 
 func testCreateFiles(t *testing.T, files map[string]testFile) (map[string]os.FileInfo, string) {
@@ -53,9 +54,14 @@ func testCreateFiles(t *testing.T, files map[string]testFile) (map[string]os.Fil
 		default:
 			err = os.WriteFile(path, []byte(tf.contents), tf.mode)
 		}
+
+		if tf.modified.IsZero() {
+			tf.modified = fixedModTime
+		}
+
 		require.NoError(t, err)
 		require.NoError(t, lchmod(path, tf.mode))
-		require.NoError(t, lchtimes(path, tf.mode, fixedModTime, fixedModTime))
+		require.NoError(t, lchtimes(path, tf.mode, tf.modified, tf.modified))
 	}
 
 	archiveFiles := make(map[string]os.FileInfo)
@@ -431,6 +437,76 @@ func TestArchiveWithOffset(t *testing.T) {
 	require.EqualValues(t, 3, entries)
 
 	testExtract(t, f.Name(), testFiles)
+}
+
+func TestArchiveWithModifiedEpoch(t *testing.T) {
+	testFiles := map[string]testFile{
+		"foo.go": {mode: 0666, modified: time.Now(), contents: "22222222222222222222222222222222222222222222222222"},
+		"bar.go": {mode: 0666, modified: time.Now(), contents: "11111111111111111111111111111111111111111111111111"},
+	}
+
+	files, dir := testCreateFiles(t, testFiles)
+	defer os.RemoveAll(dir)
+
+	f, err := os.CreateTemp("", "fastzip-test")
+	require.NoError(t, err)
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	ts, err := time.Parse(time.RFC3339, "2022-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	a, err := NewArchiver(f, WithModifiedEpoch(ts))
+	require.NoError(t, err)
+	require.NoError(t, a.Archive(context.Background(), dir, files))
+	require.NoError(t, a.Close())
+
+	b, entries := a.Written()
+	require.EqualValues(t, 100, b)
+	require.EqualValues(t, 3, entries)
+
+	cfs := testExtract(t, f.Name(), testFiles)
+	for _, cf := range cfs {
+		require.True(t, ts.Equal(cf.ModTime()))
+	}
+}
+
+func TestArchiveWithSkipOwnership(t *testing.T) {
+	testFiles := map[string]testFile{
+		"foo.go": {mode: 0666, contents: "22222222222222222222222222222222222222222222222222"},
+		"bar.go": {mode: 0666, contents: "11111111111111111111111111111111111111111111111111"},
+	}
+
+	files, dir := testCreateFiles(t, testFiles)
+	defer os.RemoveAll(dir)
+
+	f, err := os.CreateTemp("", "fastzip-test")
+	require.NoError(t, err)
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	a, err := NewArchiver(f, WithSkipOwnership(true))
+	require.NoError(t, err)
+	require.NoError(t, a.Archive(context.Background(), dir, files))
+	require.NoError(t, a.Close())
+
+	b, entries := a.Written()
+	require.EqualValues(t, 100, b)
+	require.EqualValues(t, 3, entries)
+
+	testExtract(t, f.Name(), testFiles)
+
+	e, err := NewExtractor(f.Name())
+	require.NoError(t, err)
+	defer e.Close()
+
+	for _, cf := range e.Files() {
+		// assert that the extra field is only long enough to store the timestamps
+		// if permissions are added to the extra field, the extra field will be
+		// longer than 9 bytes
+		require.Len(t, cf.Extra, 9)
+	}
+
 }
 
 var archiveDir = flag.String("archivedir", runtime.GOROOT(), "The directory to use for archive benchmarks")

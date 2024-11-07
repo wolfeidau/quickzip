@@ -14,6 +14,10 @@ import (
 )
 
 func (a *Archiver) createHeader(fi os.FileInfo, hdr *zip.FileHeader) (io.Writer, error) {
+	if a.options.skipOwnership {
+		return a.zw.CreateHeader(hdr)
+	}
+
 	stat, ok := fi.Sys().(*syscall.Stat_t)
 	if ok {
 		hdr.Extra = append(hdr.Extra, zipextra.NewInfoZIPNewUnix(big.NewInt(int64(stat.Uid)), big.NewInt(int64(stat.Gid))).Encode()...)
@@ -23,6 +27,10 @@ func (a *Archiver) createHeader(fi os.FileInfo, hdr *zip.FileHeader) (io.Writer,
 }
 
 func (a *Archiver) createRaw(fi os.FileInfo, hdr *zip.FileHeader) (io.Writer, error) {
+	if a.options.skipOwnership {
+		return a.zw.CreateHeader(hdr)
+	}
+
 	stat, ok := fi.Sys().(*syscall.Stat_t)
 	if ok {
 		hdr.Extra = append(hdr.Extra, zipextra.NewInfoZIPNewUnix(big.NewInt(int64(stat.Uid)), big.NewInt(int64(stat.Gid))).Encode()...)
