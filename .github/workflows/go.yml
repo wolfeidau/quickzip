@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: '${{ github.workflow }}-${{ github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -22,6 +26,18 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Run tests
-        run: go test --cpu 1,4 -race -coverprofile coverage.txt -covermode atomic ./...
+        run: go test --cpu 1,4 -race -coverprofile coverage.out -covermode atomic ./...
 
-      - uses: codecov/codecov-action@v2
+      - name: 'Coverage'
+        shell: 'bash'
+        working-directory: '${{ inputs.directory }}'
+        run: |-
+          OUTPUT="$(go tool cover -func=./coverage.out)"
+          TOTAL="$(echo $OUTPUT | awk 'END{print $NF}')"
+          tee -a $GITHUB_STEP_SUMMARY > /dev/null <<EOF
+            ## Coverage: ${TOTAL}
+
+            \`\`\`text
+            ${OUTPUT}
+            \`\`\`
+          EOF
