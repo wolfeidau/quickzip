@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/wolfeidau/quickzip"
@@ -26,18 +27,27 @@ func (i *arrayFlags) Set(value string) error {
 }
 
 var (
-	archiveDirs arrayFlags
-	// archiveDir  = flag.String("archivedir", runtime.GOROOT(), "The directory to use for archive benchmarks")
-	bufferSize = flag.Int("buffersize", 2*1024*1024, "The buffer size to use for archiving")
+	archiveDirs   arrayFlags
+	bufferSize    int
+	modifiedEpoch string
+	skipOwnership bool
 )
 
 func main() {
 	flag.Var(&archiveDirs, "archivedir", "The directories to add to the archive.")
+	flag.IntVar(&bufferSize, "buffersize", 2*1024*1024, "The buffer size to use for archiving")
+	flag.StringVar(&modifiedEpoch, "modified", "", "The modified epoch to use for the archive")
+	flag.BoolVar(&skipOwnership, "skipownership", false, "Skip ownership of files in the archive")
 	flag.Parse()
-
 	filename := flag.Arg(0)
 	if filename == "" {
 		myUsage()
+		os.Exit(1)
+	}
+
+	modified, err := time.Parse(time.RFC3339, modifiedEpoch)
+	if err != nil {
+		fmt.Printf("Error parsing modified epoch: %s\n", err)
 		os.Exit(1)
 	}
 
@@ -54,7 +64,9 @@ func main() {
 
 	arc, err := quickzip.NewArchiver(f,
 		quickzip.WithArchiverMethod(zstd.ZipMethodWinZip),
-		quickzip.WithArchiverBufferSize(*bufferSize),
+		quickzip.WithArchiverBufferSize(bufferSize),
+		quickzip.WithModifiedEpoch(modified),
+		quickzip.WithSkipOwnership(skipOwnership),
 	)
 	if err != nil {
 		fmt.Printf("Error creating archive: %s\n", err)
@@ -104,7 +116,7 @@ func myUsage() {
 	flag.PrintDefaults()
 }
 
-// calculte the percentage of the archive that is deflated
+// calculate the percentage of the archive that is deflated
 func deflatePercentage(total, compressed int64) float64 {
 	return float64(compressed) / float64(total) * 100
 }

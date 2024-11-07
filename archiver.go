@@ -155,6 +155,10 @@ func (a *Archiver) Archive(ctx context.Context, chroot string, files map[string]
 		hdr := &hdrs[i]
 		fileInfoHeader(rel, fi, hdr)
 
+		if !a.options.modifiedEpoch.IsZero() {
+			hdr.Modified = a.options.modifiedEpoch
+		}
+
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

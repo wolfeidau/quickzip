@@ -2,6 +2,7 @@ package quickzip
 
 import (
 	"errors"
+	"time"
 )
 
 var (
@@ -12,11 +13,13 @@ var (
 type ArchiverOption func(*archiverOptions) error
 
 type archiverOptions struct {
-	method      uint16
-	concurrency int
-	bufferSize  int
-	stageDir    string
-	offset      int64
+	method        uint16
+	concurrency   int
+	bufferSize    int
+	stageDir      string
+	offset        int64
+	modifiedEpoch time.Time
+	skipOwnership bool
 }
 
 // WithArchiverMethod sets the zip method to be used for compressible files.
@@ -69,6 +72,21 @@ func WithStageDirectory(dir string) ArchiverOption {
 func WithArchiverOffset(n int64) ArchiverOption {
 	return func(o *archiverOptions) error {
 		o.offset = n
+		return nil
+	}
+}
+
+// WithModifiedEpoch sets the modified epoch to be used for the archive.
+func WithModifiedEpoch(modifiedEpoch time.Time) ArchiverOption {
+	return func(o *archiverOptions) error {
+		o.modifiedEpoch = modifiedEpoch
+		return nil
+	}
+}
+
+func WithSkipOwnership(skipOwnership bool) ArchiverOption {
+	return func(o *archiverOptions) error {
+		o.skipOwnership = skipOwnership
 		return nil
 	}
 }
