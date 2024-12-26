@@ -115,10 +115,9 @@ func TestArchive(t *testing.T) {
 	}
 
 	tests := map[string][]ArchiverOption{
-		"default options":    nil,
-		"no buffer":          {WithArchiverBufferSize(0)},
-		"with store":         {WithArchiverMethod(zip.Store)},
-		"with concurrency 2": {WithArchiverConcurrency(2)},
+		"default options": nil,
+		"no buffer":       {WithArchiverBufferSize(0)},
+		"with store":      {WithArchiverMethod(zip.Store)},
 	}
 
 	for tn, opts := range tests {
@@ -156,7 +155,7 @@ func TestArchiveCancelContext(t *testing.T) {
 	defer os.Remove(f.Name())
 	defer f.Close()
 
-	a, err := NewArchiver(f, WithArchiverConcurrency(1))
+	a, err := NewArchiver(f)
 	a.RegisterCompressor(zip.Deflate, FlateCompressor(1))
 	require.NoError(t, err)
 
@@ -270,51 +269,6 @@ func TestArchiveWithStageDirectory(t *testing.T) {
 	require.Zero(t, len(stageFiles))
 
 	testExtract(t, f.Name(), testFiles)
-}
-
-func TestArchiveWithConcurrency(t *testing.T) {
-	testFiles := map[string]testFile{
-		"foo.go": {mode: 0666},
-		"bar.go": {mode: 0666},
-	}
-
-	concurrencyTests := []struct {
-		concurrency int
-		pass        bool
-	}{
-		{-1, false},
-		{0, false},
-		{1, true},
-		{30, true},
-	}
-
-	files, dir := testCreateFiles(t, testFiles)
-	defer os.RemoveAll(dir)
-
-	for _, test := range concurrencyTests {
-		func() {
-			f, err := os.CreateTemp("", "fastzip-test")
-			require.NoError(t, err)
-			defer os.Remove(f.Name())
-			defer f.Close()
-
-			a, err := NewArchiver(f, WithArchiverConcurrency(test.concurrency))
-			if !test.pass {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			require.NoError(t, a.Archive(context.Background(), dir, files))
-			require.NoError(t, a.Close())
-
-			bytes, entries := a.Written()
-			require.EqualValues(t, 0, bytes)
-			require.EqualValues(t, 3, entries)
-
-			testExtract(t, f.Name(), testFiles)
-		}()
-	}
 }
 
 func TestArchiveWithBufferSize(t *testing.T) {
@@ -549,65 +503,25 @@ func benchmarkArchiveOptions(b *testing.B, stdDeflate bool, options ...ArchiverO
 }
 
 func BenchmarkArchiveStore_1(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(1), WithArchiverMethod(zip.Store))
+	benchmarkArchiveOptions(b, true, WithArchiverMethod(zip.Store))
 }
 
 func BenchmarkArchiveStandardFlate_1(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(1))
-}
-
-func BenchmarkArchiveStandardFlate_2(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(2))
-}
-
-func BenchmarkArchiveStandardFlate_4(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(4))
-}
-
-func BenchmarkArchiveStandardFlate_8(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(8))
-}
-
-func BenchmarkArchiveStandardFlate_16(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(16))
+	benchmarkArchiveOptions(b, true)
 }
 
 func BenchmarkArchiveNonStandardFlate_1(b *testing.B) {
-	benchmarkArchiveOptions(b, false, WithArchiverConcurrency(1))
-}
-
-func BenchmarkArchiveNonStandardFlate_2(b *testing.B) {
-	benchmarkArchiveOptions(b, false, WithArchiverConcurrency(2))
-}
-
-func BenchmarkArchiveNonStandardFlate_4(b *testing.B) {
-	benchmarkArchiveOptions(b, false, WithArchiverConcurrency(4))
-}
-
-func BenchmarkArchiveNonStandardFlate_8(b *testing.B) {
-	benchmarkArchiveOptions(b, false, WithArchiverConcurrency(8))
-}
-
-func BenchmarkArchiveNonStandardFlate_16(b *testing.B) {
-	benchmarkArchiveOptions(b, false, WithArchiverConcurrency(16), WithArchiverMethod(zstd.ZipMethodWinZip))
+	benchmarkArchiveOptions(b, false)
 }
 
 func BenchmarkArchiveZstd_1(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(1), WithArchiverMethod(zstd.ZipMethodWinZip))
+	benchmarkArchiveOptions(b, true, WithArchiverMethod(zstd.ZipMethodWinZip))
 }
 
-func BenchmarkArchiveZstd_2(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(2), WithArchiverMethod(zstd.ZipMethodWinZip))
+func BenchmarkArchiveZstd_SkipOwnership(b *testing.B) {
+	benchmarkArchiveOptions(b, true, WithArchiverMethod(zstd.ZipMethodWinZip), WithSkipOwnership(true))
 }
 
-func BenchmarkArchiveZstd_4(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(4), WithArchiverMethod(zstd.ZipMethodWinZip))
-}
-
-func BenchmarkArchiveZstd_8(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(8), WithArchiverMethod(zstd.ZipMethodWinZip))
-}
-
-func BenchmarkArchiveZstd_16(b *testing.B) {
-	benchmarkArchiveOptions(b, true, WithArchiverConcurrency(16), WithArchiverMethod(zstd.ZipMethodWinZip))
+func BenchmarkArchiveZstd_ModifiedEpoch(b *testing.B) {
+	benchmarkArchiveOptions(b, true, WithArchiverMethod(zstd.ZipMethodWinZip), WithModifiedEpoch(time.Now()))
 }

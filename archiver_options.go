@@ -14,7 +14,6 @@ type ArchiverOption func(*archiverOptions) error
 
 type archiverOptions struct {
 	method        uint16
-	concurrency   int
 	bufferSize    int
 	stageDir      string
 	offset        int64
@@ -26,18 +25,6 @@ type archiverOptions struct {
 func WithArchiverMethod(method uint16) ArchiverOption {
 	return func(o *archiverOptions) error {
 		o.method = method
-		return nil
-	}
-}
-
-// WithArchiverConcurrency will set the maximum number of files to be
-// compressed concurrently. The default is set to GOMAXPROCS.
-func WithArchiverConcurrency(n int) ArchiverOption {
-	return func(o *archiverOptions) error {
-		if n <= 0 {
-			return ErrMinConcurrency
-		}
-		o.concurrency = n
 		return nil
 	}
 }
