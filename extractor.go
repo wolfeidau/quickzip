@@ -119,12 +119,10 @@ func (e *Extractor) Written() (bytes, entries int64) {
 	return atomic.LoadInt64(&e.written), atomic.LoadInt64(&e.entries)
 }
 
-// Extract extracts files, creates symlinks and directories from the
-// archive.
-func (e *Extractor) Extract(ctx context.Context, chroot string) (err error) {
-	if chroot, err = filepath.Abs(chroot); err != nil {
-		return err
-	}
+// ExtractWithPathMapper extracts files from the zip archive, creating directories and symlinks as needed.
+// It uses the provided pathFunc to map each zip.File to a destination path on the filesystem.
+// The function returns an error if any part of the extraction fails.
+func (e *Extractor) ExtractWithPathMapper(ctx context.Context, pathMapper func(file *zip.File) (string, error)) (err error) {
 	limiter := make(chan struct{}, e.options.concurrency)
 
 	wg, ctx := errgroup.WithContext(ctx)
@@ -140,13 +138,9 @@ func (e *Extractor) Extract(ctx context.Context, chroot string) (err error) {
 		}
 
 		var path string
-		path, err = filepath.Abs(filepath.Join(chroot, file.Name))
+		path, err = pathMapper(file)
 		if err != nil {
 			return err
-		}
-
-		if !strings.HasPrefix(path, chroot+string(filepath.Separator)) && path != chroot {
-			return fmt.Errorf("%s cannot be extracted outside of chroot (%s)", path, chroot)
 		}
 
 		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
@@ -196,7 +190,7 @@ func (e *Extractor) Extract(ctx context.Context, chroot string) (err error) {
 			continue
 		}
 
-		path, err := filepath.Abs(filepath.Join(chroot, file.Name))
+		path, err := pathMapper(file)
 		if err != nil {
 			return err
 		}
@@ -215,6 +209,28 @@ func (e *Extractor) Extract(ctx context.Context, chroot string) (err error) {
 	}
 
 	return nil
+}
+
+// Extract extracts files, creates symlinks and directories from the
+// archive.
+func (e *Extractor) Extract(ctx context.Context, chroot string) (err error) {
+	if chroot, err = filepath.Abs(chroot); err != nil {
+		return err
+	}
+
+	return e.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
+		var path string
+		path, err = filepath.Abs(filepath.Join(chroot, file.Name))
+		if err != nil {
+			return "", err
+		}
+
+		if !strings.HasPrefix(path, chroot+string(filepath.Separator)) && path != chroot {
+			return "", fmt.Errorf("%s cannot be extracted outside of chroot (%s)", path, chroot)
+		}
+
+		return path, nil
+	})
 }
 
 func (e *Extractor) createDirectory(path string, file *zip.File) error {
