@@ -4,8 +4,8 @@ package quickzip
 type ExtractorOption func(*extractorOptions) error
 
 type extractorOptions struct {
-	concurrency       int
 	chownErrorHandler func(name string, err error) error
+	concurrency       int
 }
 
 // WithExtractorConcurrency will set the maximum number of files being

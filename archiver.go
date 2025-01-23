@@ -36,15 +36,12 @@ var (
 //
 // Access permissions, ownership (unix) and modification times are preserved.
 type Archiver struct {
-	// This 2 fields are accessed via atomic operations
-	// They are at the start of the struct so they are properly 8 byte aligned
-	written, entries int64
-
-	zw      *zip.Writer
-	options archiverOptions
-	m       sync.Mutex
-
+	zw          *zip.Writer
 	compressors map[uint16]zip.Compressor
+	options     archiverOptions
+	written     int64
+	entries     int64
+	m           sync.Mutex
 }
 
 // NewArchiver returns a new Archiver.

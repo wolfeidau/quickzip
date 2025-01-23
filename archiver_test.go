@@ -22,9 +22,9 @@ import (
 var fixedModTime = time.Date(2020, time.February, 1, 6, 0, 0, 0, time.UTC)
 
 type testFile struct {
-	mode     os.FileMode
-	contents string
 	modified time.Time
+	contents string
+	mode     os.FileMode
 }
 
 func testCreateFiles(t *testing.T, files map[string]testFile) (map[string]os.FileInfo, string) {
