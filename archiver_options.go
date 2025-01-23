@@ -13,11 +13,11 @@ var (
 type ArchiverOption func(*archiverOptions) error
 
 type archiverOptions struct {
-	method        uint16
-	bufferSize    int
-	stageDir      string
-	offset        int64
 	modifiedEpoch time.Time
+	stageDir      string
+	bufferSize    int
+	offset        int64
+	method        uint16
 	skipOwnership bool
 }
 
