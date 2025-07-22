@@ -151,7 +151,12 @@ func StdFlateCompressor(level int) func(w io.Writer) (io.WriteCloser, error) {
 
 func ZstdCompressor(level int) func(w io.Writer) (io.WriteCloser, error) {
 	pool := newFlateWriterPool(level, func(w io.Writer, level int) (flater, error) {
-		return zstd.NewWriter(w, zstd.WithEncoderCRC(false), zstd.WithEncoderLevel(zstd.EncoderLevel(level)))
+		return zstd.NewWriter(w,
+			zstd.WithEncoderCRC(false),
+			zstd.WithEncoderLevel(zstd.EncoderLevel(level)),
+			// Enable detection of already compressed data
+			zstd.WithNoEntropyCompression(false),
+		)
 	})
 
 	return func(w io.Writer) (io.WriteCloser, error) {
