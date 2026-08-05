@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -223,7 +222,7 @@ func (e *Extractor) Extract(ctx context.Context, chroot string) (err error) {
 			return "", err
 		}
 
-		if !strings.HasPrefix(path, chroot+string(filepath.Separator)) && path != chroot {
+		if !withinChroot(path, chroot) {
 			return "", fmt.Errorf("%s cannot be extracted outside of chroot (%s)", path, chroot)
 		}
 

@@ -365,6 +365,27 @@ func TestArchiveChroot(t *testing.T) {
 	}
 }
 
+func TestArchiveChrootAtFilesystemRoot(t *testing.T) {
+	dir := t.TempDir()
+	f, err := os.Create(filepath.Join(dir, "archive.zip"))
+	require.NoError(t, err)
+	defer f.Close()
+
+	w, err := os.Create(filepath.Join(dir, "file"))
+	require.NoError(t, err)
+	stat, err := w.Stat()
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	a, err := NewArchiver(f)
+	require.NoError(t, err)
+
+	root := filepath.VolumeName(dir) + string(filepath.Separator)
+	err = a.Archive(context.Background(), root, map[string]os.FileInfo{w.Name(): stat})
+	assert.NoError(t, err)
+	require.NoError(t, a.Close())
+}
+
 func TestArchiveWithOffset(t *testing.T) {
 	testFiles := map[string]testFile{
 		"foo.go": {mode: 0666},
