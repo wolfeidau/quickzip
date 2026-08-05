@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -112,7 +111,7 @@ func (a *Archiver) Archive(ctx context.Context, chroot string, files map[string]
 			return err
 		}
 
-		if !strings.HasPrefix(path, chroot+string(filepath.Separator)) && path != chroot {
+		if !withinChroot(path, chroot) {
 			return fmt.Errorf("%s cannot be archived from outside of chroot (%s)", name, chroot)
 		}
 
